@@ -71,11 +71,15 @@ tail -F -n 0 "$LOG_FILE" 2>/dev/null | while read -r line; do
     if [[ "$line" == *"LogNet: Join succeeded:"* ]]; then
         JOIN_NAME=$(echo "$line" | sed 's/.*Join succeeded: //' | tr -d '\r\n' | xargs)
         
-        if [ -n "$JOIN_NAME" ]; then
+        # Ensure name isn't blank or "Unknown"
+        if [ -n "$JOIN_NAME" ] && [[ "$JOIN_NAME" != "Unknown" ]]; then
             # Add to online list if not already there
             if ! grep -qx "$JOIN_NAME" "$LIST_FILE"; then
                 echo "$JOIN_NAME" >> "$LIST_FILE"
             fi
+            
+            # Remove from recent offline list if they rejoin
+            sed -i "/^$JOIN_NAME$/d" "$RECENT_FILE"
 
             if [ -n "$LOG_WEBHOOK" ]; then
                 TEMP_SNAME=$(echo "${SERVER_NAME:-Conan Server}" | tr -d '"' | tr -dc '[:print:]')
@@ -101,10 +105,14 @@ EOF
     if [[ "$line" == *"LogNet: Player disconnected:"* ]]; then
         LEAVE_NAME=$(echo "$line" | sed 's/.*Player disconnected: //' | tr -d '\r\n' | xargs)
         
-        if [ -n "$LEAVE_NAME" ]; then
+        # Ensure name isn't blank or "Unknown"
+        if [ -n "$LEAVE_NAME" ] && [[ "$LEAVE_NAME" != "Unknown" ]]; then
             # Remove from online list
             sed -i "/^$LEAVE_NAME$/d" "$LIST_FILE"
             sed -i '/^$/d' "$LIST_FILE"
+
+            # Remove from recent list BEFORE adding back to prevent duplicates
+            sed -i "/^$LEAVE_NAME$/d" "$RECENT_FILE"
 
             # Add to recently offline list (max 20)
             echo "$LEAVE_NAME" >> "$RECENT_FILE"
